@@ -48,12 +48,12 @@ ICカード利用履歴を使用してICカードから取引情報と現在の�
 ## スクリーンショット
 ICカード利用履歴の動作を示すいくつかのスクリーンショットを以下に示します。
 
-スクリーンショット1: ICカード利用履歴ダッシュボード
-![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/57735789-50a6-4445-81f2-2a31c4845226)
+- スクリーンショット1: ICカード利用履歴ダッシュボード
+![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/b57f1053-424e-4843-b75f-9d1e5b81d08a)
 
-ハードウェア
-![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/69002a23-9678-4d9f-bad6-c1205b47fe0b)
-![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/35a4530b-daa1-4c74-9b18-72ee8385a28a)
+- ハードウェア
+![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/3662aedb-7184-4844-ab7a-006e791e63ff)
+![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/b4a6fd75-c67d-471f-a748-d57478b67e46)
 
 
 
