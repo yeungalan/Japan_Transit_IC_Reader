@@ -50,9 +50,11 @@ ICカード利用履歴の動作を示すいくつかのスクリーンショッ
 
 - スクリーンショット1: ICカード利用履歴ダッシュボード
 ![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/b57f1053-424e-4843-b75f-9d1e5b81d08a)
+![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/3c4ff011-f214-49a6-81b1-fe4d854199c2)
 
 - ハードウェア
-![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/3662aedb-7184-4844-ab7a-006e791e63ff)
+
+![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/3662aedb-7184-4844-ab7a-006e791e63ff) <br>
 ![image](https://github.com/yeungalan/Japan_Transit_IC_Reader/assets/12872405/b4a6fd75-c67d-471f-a748-d57478b67e46)
 
 
