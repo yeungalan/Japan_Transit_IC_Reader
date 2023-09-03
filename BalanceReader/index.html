@@ -1,0 +1,153 @@
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tocas-ui/4.2.4/tocas.min.css" integrity="sha512-Azbpzww2iwgZnmRJqLrQVZktLB5Vk8wnmQjk1G0rm15HnD4Arovfnmb52Yqx2von3BY3eKB+oogNo6qV1RFfHA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/tocas-ui/4.2.4/tocas.min.js" integrity="sha512-M7tPiRrT1T65NiwmF9q+hSAUNW4CPmCy12MRbpJjIX31kR6xL0xlt4fkkIafhwK6d+LoS7RjLUkZ2sPdlpratQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;1000&display=swap" rel="stylesheet" />
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script src="./js/csv.min.js"></script>
+		<script src="./js/process.js"></script>
+		<script type="module" src="./js/nfcread.js"></script>
+		<title>SFCard Viewer Web版</title>
+    </head>
+    <body>
+        <!-- 頂部列 -->
+        <div class="ts-content is-tertiary is-fitted">
+            <div class="ts-container">
+                <div class="ts-tab">
+                    <a href="#!" class="is-active item">ICカード利用履歴</a>
+					<a href="#!" id="reload" class="item">ICカードを読み込む</a>
+                </div>
+            </div>
+        </div>
+        <!-- / 頂部列 -->
+
+        <div class="ts-divider"></div>
+
+        <!-- 矚目看板 -->
+        <div class="ts-content is-tertiary is-vertically-padded">
+            <div class="ts-container u-vertically-spaced-large">
+                <div id="finalBalance" class="ts-header is-massive">¥-</div>
+                <div class="ts-text is-secondary">残額</div>
+            </div>
+        </div>
+        <!-- / 矚目看板 -->
+
+        <div class="ts-divider"></div>
+        <div class="ts-container u-vertically-padded-big">
+    
+			<table class="ts-table is-striped is-relaxed is-basic u-top-spaced-small">
+                <thead>
+                    <tr>
+                        <th>利用年月日</th>
+                        <th>入場駅 / 事業者</th>
+                        <th>出場駅 / 降車場所</th>
+                        <th>利用額</th>
+                        <th>残額</th>
+						<th>メモ</th>
+                    </tr>
+                </thead>
+                <tbody id="table">
+                </tbody>
+            </table>
+			<div id="loader" class="ts-loading is-centered is-notched is-large"></div>
+        </div>
+    </body>
+
+	<script>
+		const module = {};
+
+	</script>
+	<script type="module">
+		import {initNFC, readCard} from "./js/nfcRead.js";
+		module.initNFC = initNFC;
+		module.readCard = readCard;
+	</script>
+
+	
+	<script>
+		document.getElementById("reload").addEventListener("click", readNewCard);
+
+		window.addEventListener('load', async function () {
+			init();
+			await module.initNFC();
+
+
+			setTimeout(readNewCard, 1000);
+
+		})
+
+
+		async function readNewCard() {
+			$("#table").html("");
+			$("#loader").attr("style", "");
+			$("#table").attr("style", "display:none");
+			$("#finalBalance").text("¥-");
+			for(var i = 0x00; i < 0x14; i++) {
+				const result = await module.readCard(i);
+				insertTable(inputResult(result));
+			}
+
+			calculateBalance();
+			$("#table").attr("style", "");
+			$("#loader").attr("style", "display:none");
+		}
+
+
+		async function insertTable(information) {
+			console.log(information);
+			if(information["sequence"] == 0 && information["console"] == "???" && information["process"] == "???") {
+				return;
+			}
+			var newRow = '<tr>' +
+                    '<td>' + information["date"][0] + "/" + information["date"][1] + "/" + information["date"][2] + '</td>' +
+                    '<td>' + handleUndefinedInput(information["enter"])[0] + " " + handleUndefinedInput(information["enter"])[2] + '</td>' +
+                    '<td>' + handleUndefinedInput(information["enter"])[0] + " " + handleUndefinedInput(information["leave"])[2] + '</td>' +
+                    '<td id="amount">' + "¥----" + '</td>' +
+                    '<td id="balance">' + "¥" + information["balance"] + '</td>' +
+                    '<td>' + information["process"] + '</td>' +
+                    '</tr>';
+
+            // Append the new row to the table's tbody
+            $("#table").append(newRow);
+		}
+		function handleUndefinedInput(input) {
+			if (typeof input === 'undefined') {
+				return ['','',''];
+			} else {
+				return input;
+			}
+		}
+
+		function calculateBalance() {
+			var firstCol = $("#table > tr").first();
+			var col = $("#table > tr");
+			var prev = null;
+			var first = true;
+			col.each(function() {
+				if(first) {
+					prev = $(this);
+					first = false;
+				}else{
+					var currBalance = $(this).children("#balance").text().replace("¥", "");
+					var prevBalance = $(prev).children("#balance").text().replace("¥", "");
+					console.log(currBalance + "-" + prevBalance);
+					var diff = parseInt(currBalance) - parseInt(prevBalance);
+					if(diff < 0) {
+						diff *= -1;
+						$(prev).children("#amount").text("+¥" + diff);
+					}else{
+						$(prev).children("#amount").text("¥" + diff);
+					}
+
+					prev = $(this);
+				}
+			});
+			$("#finalBalance").text(firstCol.children("#balance").text());
+		}
+
+	</script>
+</html>

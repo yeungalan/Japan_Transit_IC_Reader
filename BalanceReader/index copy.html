@@ -1,0 +1,309 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!-- saved from url=(0090)https://www.felica-support.sony.biz/sdk/ICS-DCW1PC/download/package/NFCPortLib_sample.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=Shift_JIS">
+	<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.css" integrity="sha512-KXol4x3sVoO+8ZsWPFI/r5KBVB/ssCGB5tsv2nVOKwLg33wTFP3fmnXa47FdSVIshVTgsYk/1734xSk9aFIa4A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.js" integrity="sha512-Xo0Jh8MsOn72LGV8kU5LsclG7SUzJsWGhXbWcYs2MAmChkQzwiW/yTQwdJ8w6UA9C6EVG18GHb/TrYpYCjyAQw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+	<title>SDK for NFC Web Client Sample</title>
+</head>
+<body>
+
+	<!--
+	<h3>
+		<div class="header-title">
+			SDK for NFC Web Client Sample
+		</div>
+	</h3>
+
+    <div class="mainArea">
+		<div class="button1">
+			<span class="col-1" style="display: inline-block; width: 800px">Octopus Card Balance Checker</span>
+			<button id="FeliCa">Execute</button>
+		</div>
+		<br><br>
+		<div class="detect">
+			<div id="detect-title" class="detect-title" style="display: inline;">Card is detected</div><br>
+			<div id="detect" class="detect-info" style="display: inline;">IDm : </div>
+		</div>
+		<br>
+		<div class="communicate">
+			<div id="communicate-title" class="communicate-title" style="display: inline;">Reading...</div><br>
+			<div id="communicate" class="communicate-response" style="display: inline;">Send    : <br>Receive : </div>
+		</div>
+	</div>
+-->
+
+<div class="ui container">
+	<h1 class="ui header">Transit Card Balance</h1>
+	<div class="ui card">
+		<div class="content">
+			<div class="header">Card Balance</div>
+			<div class="description">
+				<!-- Display the balance here -->
+				<h2 class="ui header">
+					<i class="dollar sign icon"></i>
+					<div class="content">
+						<span id="balanceAmount">$--</span>
+						<div class="sub header">Available Balance</div>
+					</div>
+				</h2>
+			</div>
+		</div>
+		<div class="extra content">
+			<!-- Button to read balance from card -->
+			<button class="ui primary button" id="readBalanceButton">Read Balance</button>
+		</div>
+	</div>
+	<div class="detect">
+		<div id="detect-title" class="detect-title" style="display: inline;">Card is detected</div><br>
+		<div id="detect" class="detect-info" style="display: inline;">IDm : </div>
+	</div>
+	<br>
+	<div class="communicate">
+		<div id="communicate-title" class="communicate-title" style="display: inline;">Reading...</div><br>
+		<div id="communicate" class="communicate-response" style="display: inline;">Send    : <br>Receive : </div>
+	</div>
+</div>
+
+<script type="module">
+
+	import {NFCPortLib, NFCPortError, Configuration, DetectionOption, CommunicationOption, TargetCard} from './js/NFCPortLib.js';
+
+	let detectTitle = document.getElementById('detect-title');
+	let detectMessage = document.getElementById('detect');
+	let communicateTitle = document.getElementById('communicate-title');
+	let communicateMessage = document.getElementById('communicate');
+
+	document.getElementById('readBalanceButton').addEventListener('click', function () {
+		felica_card();
+		return;
+	});
+
+    let lib = null;
+    var detectOption = null;
+    init();
+
+    async function init() {
+        /* create NFCPortLib object */
+        try {
+            /* init() */
+            lib = new NFCPortLib();
+
+            let config = new Configuration(1000 /* ackTimeout */, 1000 /* receiveTimeout */, true /* autoBaudRate*/, true /* autoDeviceSelect */);
+            await lib.init(config);
+            console.log('deviceName : ' + lib.deviceName);
+            await lib.open();
+
+            /* detectCard(FeliCa Card) */
+            detectOption = new DetectionOption(new Uint8Array([0x00, 0x03]), 0, true, false, null);
+			//detectOption = new DetectionOption(new Uint8Array([0x80, 0x08]), 0, true, false, null);
+
+            //
+
+            felica_card();
+			//setInterval(felica_card,500);
+
+        } catch(error) {
+			console.log('Error errorType : ' + error.errorType);
+			console.log('      message : ' + error.message);
+
+			if (lib != null) {
+				//await lib.close();
+				//lib = null;
+			}
+		}
+
+    }
+	
+
+	async function felica_card() {
+		console.log('[Reading a FeliCa Card] Begin');
+
+
+		//detectTitle.innerText = '';
+		//detectMessage.innerText = '';
+		//communicateTitle.innerText = '';
+		//communicateMessage.innerText = '';
+
+		try {
+            //await lib.open();
+			let card = await lib.detectCard('iso18092', detectOption)
+			.then(ret => {
+				//detectTitle.innerText = 'Card is detected';
+				if (ret.systemCode == null) {
+					console.log('IDm : ' + _array_tohexs(ret.idm) +
+								'\nPMm : ' + _array_tohexs(ret.pmm) +
+								'\ntargetCardBaudRate : ' + lib.targetCardBaudRate + 'kbps');
+				} else {
+					console.log('IDm : ' + _array_tohexs(ret.idm) +
+								'\nPMm : ' + _array_tohexs(ret.pmm) +
+								'\nSystemCode : ' + _array_tohexs(ret.systemCode) +
+								'\ntargetCardBaudRate : ' + lib.targetCardBaudRate + 'kbps');
+				}
+				detectMessage.innerText = 'IDm : ' + _array_tohexs(ret.idm);
+				return ret;
+			}, (error) => {
+				detectTitle.innerText = 'Card is not detected';
+				throw(error);
+			});
+
+			/* communicateThru(Read Block) */
+			//let felica_read_without_encryption = new Uint8Array([16, 0x06, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 1, 0x09,0x10, 1, 0x80,0x01]);
+            //let felica_read_without_encryption = new Uint8Array([8, 0xFF, 0xA4, 0x00, 0x01, 0x02, 0x0F, 0x09]);
+			//_array_copy(felica_read_without_encryption, 2, card.idm, 0, card.idm.length);
+
+			//let felica_read_without_encryption = new Uint8Array([0x00, 0xA4, 0x04, 0x00, 0x09, 0xA0, 0x00, 0x00, 0x03, 0x08, 0x00, 0x00, 0x10, 0x00]);
+			//_array_copy(felica_read_without_encryption, 2, card.idm, 0, card.idm.length);
+
+			//let felica_read_without_encryption = new Uint8Array([16, 0x06, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 1, 0x09,0x0F, 1, 0x80,0x01]);
+
+			// -1.9
+			// ORIG
+			// let felica_read_without_encryption = new Uint8Array([16, 0x06, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 1, 0x09,0x10, 1, 0x80,0x01]);
+
+			let felica_read_without_encryption = new Uint8Array([16, 0x06, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 1, 0x0F ,0x09, 1, 0x80,0x00]);
+
+			console.log( _array_tohexs(felica_read_without_encryption));
+			_array_copy(felica_read_without_encryption, 2, card.idm, 0, card.idm.length);
+            console.log( _array_tohexs(felica_read_without_encryption));
+
+			let response = await lib.communicateThru(felica_read_without_encryption, 100, detectOption)
+			.then(ret => {
+				communicateTitle.innerText = 'Reading...';
+				communicateMessage.innerText = 'Send    : ' + _array_tohexs(felica_read_without_encryption) +
+											   '\nReceive : ' + _array_tohexs(ret);
+				console.log(ret);
+				let balance = (ret[13] << 24)  + (ret[14] << 16)  + (ret[15] << 8)  + (ret[16] << 0);
+				console.log(balance);
+				$("#balanceAmount").text("" + (balance-350) / 10);
+				return ret;
+			}, (error) => {
+				communicateTitle.innerText = 'Read error';
+				throw(error);
+			});
+
+			/* close() */
+			//await lib.close();
+			//lib = null;
+
+
+			console.log('Success');
+
+
+		} catch(error) {
+			console.log('Error errorType : ' + error.errorType);
+			console.log('      message : ' + error.message);
+
+			if (lib != null) {
+				//await lib.close();
+				//lib = null;
+			}
+		}
+
+		console.log('[Reading a FeliCa Card] End');
+		return;
+	}
+
+
+	function _def_val(param, def)
+	{
+		return (param === undefined) ? def : param;
+	}
+
+	function _array_slice(array, offset, length)
+	{
+		let result;
+
+		length = _def_val(length, array.length - offset);
+		result = [];
+		_array_copy(result, 0, array, offset, length);
+		
+		return result;
+	}
+
+	function _bytes2hexs(bytes, sep) {
+		let str;
+
+		sep = _def_val(sep, ' ');
+
+		return bytes.map(function(byte) {
+			str = byte.toString(16);
+			return byte < 0x10 ? '0'+str : str;
+		}).join(sep).toUpperCase();
+	}
+
+	function _array_tohexs(array, offset, length)
+	{
+		let temp;
+
+		offset = _def_val(offset, 0);
+		length = _def_val(length, array.length - offset);
+
+		temp = _array_slice(array, offset, length );
+		return _bytes2hexs(temp, '');
+	}
+
+	function _array_copy(dest, dest_offset, src, src_offset, length)
+	{
+		let idx;
+
+		src_offset = _def_val(src_offset, 0);
+		length = _def_val(length, src.length);
+
+		for (idx = 0; idx < length; idx++) {
+			dest[dest_offset + idx] = src[src_offset + idx];
+		}
+
+		return dest;
+	}
+</script>
+
+
+
+</body><div id="simplifyJobsContainer" style="position: fixed; top: -100%; left: -100%; width: 0px; height: 0px; overflow: visible; z-index: 2147483647;"><span><template shadowrootmode="open"><link rel="stylesheet" href="chrome-extension://pbanhockgagggenencehbnadejlgchfc/css/styles.css"><style>
+  :host {
+    all: initial;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    -moz-tab-size: 4;
+    -o-tab-size: 4;
+    tab-size: 4;
+    font-family: Palanquin, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(203, 213, 225, 1) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(203, 213, 225, 1);
+    border-radius: 3px;
+    border: 0;
+  }
+</style></template></span></div><grammarly-desktop-integration data-grammarly-shadow-root="true"><template shadowrootmode="open"><style>
+  div.grammarly-desktop-integration {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select:none;
+    user-select:none;
+  }
+
+  div.grammarly-desktop-integration:before {
+    content: attr(data-content);
+  }
+</style><div aria-label="grammarly-integration" role="group" tabindex="-1" class="grammarly-desktop-integration" data-content="{&quot;mode&quot;:&quot;full&quot;,&quot;isActive&quot;:true,&quot;isUserDisabled&quot;:false}"></div></template></grammarly-desktop-integration></html>

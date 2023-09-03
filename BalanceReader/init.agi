@@ -1,0 +1,18 @@
+/*
+	Dummy Module Registration Information
+	
+	Do not try to call any AJGI users / filepath functions in this script.
+*/
+
+
+//Define the launchInfo for the module
+var moduleLaunchInfo = {
+    Name: "Balance Reader",
+	Group: "Interface Module",
+	IconPath: "BalanceReader/img/small_icon.png",
+	Version: "0.1",
+	StartDir: "BalanceReader/index.html"
+}
+
+//Register the module
+registerModule(JSON.stringify(moduleLaunchInfo));
