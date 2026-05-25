@@ -160,6 +160,18 @@ function init(){
 
 
 function inputResult(result) {
+    // Guard: readCard() returns "" on error/empty slot — return a blank sentinel
+    // that insertTable() will silently skip (sequence==0, console=="???", process=="???").
+    if (!result || result.length < 58) {  // 13 header + 16 data bytes = 29 bytes = 58 hex chars minimum
+        var empty = [];
+        empty["console"]  = "???";
+        empty["process"]  = "???";
+        empty["date"]     = ["0000", "00", "00"];
+        empty["balance"]  = 0;
+        empty["sequence"] = 0;
+        return empty;
+    }
+
     var array = hexStringToArray(result);
     array.splice(0, 13);
     
