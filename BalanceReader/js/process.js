@@ -194,15 +194,18 @@ function inputResult(result) {
     }else if(array[0] == "C7" || array[0] == "C8") {
 
     }else{
-        //console.log(hexToFirstTwoBinaryDigits(array[15]) + "-" + array[6] + "-" + array[7]);
-        ans["enter"] = stationMap.get(hexToFirstTwoBinaryDigits(array[15]) + "-" + array[6] + "-" + array[7]);
+        var enterKey = hexToFirstTwoBinaryDigits(array[15]) + "-" + array[6] + "-" + array[7];
+        ans["enter"]    = stationMap.get(enterKey);
+        ans["enterKey"] = enterKey;
     }
     if(array[0] == "02" || array[0] == "03" || array[0] == "07" || array[0] == "08" || array[0] == "12" || array[0] == "13" || array[0] == "14" || array[0] == "15" || array[0] == "C7" || array[0] == "C8") {
         // nothing
     }else if(array[0] == "12") {
         // BUS
     }else{
-        ans["leave"] = stationMap.get(hexToFirstTwoBinaryDigits(array[15]) + "-" + array[8] + "-" + array[9]);
+        var leaveKey = hexToFirstTwoBinaryDigits(array[15]) + "-" + array[8] + "-" + array[9];
+        ans["leave"]    = stationMap.get(leaveKey);
+        ans["leaveKey"] = leaveKey;
     }
     ans["balance"] = littleEndianHexToInt(array[10] + array[11]);
     //ans[11] = array[15];
@@ -320,19 +323,16 @@ function tryDecodeDate(hi, lo) {
  * FeliCa service 0x108F — confirmed byte layout after removing the 13-byte header:
  *   [0]      定期種別 (0x00 = empty slot / no pass)
  *   [1]      flags / 区間種別
- *   [2-3]    有効開始日  validity start date  (7+4+5-bit packed, same as history)
- *   [4-5]    有効終了日  validity end date    (same encoding)
- *   [6-7]    最終利用日  last-used date (written by turnstile on each tap — NOT station codes)
- *   [8-9]    不明 / other date
- *   [10]     入場駅 線区コード  from-station line code
- *   [11]     入場駅 駅順コード  from-station station code
- *   [12]     出場駅 線区コード  to-station line code
- *   [13]     出場駅 駅順コード  to-station station code
- *   [14]     乗継区間 / other
- *   [15]     region flags — top 2 bits encode the area (same as transit-history blocks)
- *
- * NOTE: bytes [2-5] are tried first; if those decode to invalid dates the block is
- *       discarded so that "junk" empty-slot returns don't appear in the UI.
+ *   [2]      入場駅 線区コード  from-station line code
+ *             (area = top 2 bits of this byte, same encoding used in transit-history)
+ *   [3]      入場駅 駅順コード  from-station station code
+ *   [4-5]    不明 / possibly validity start date (7+4+5-bit packed)
+ *   [6-7]    最終利用日 last-used date (written by turnstile on each tap)
+ *   [8-9]    有効開始日 validity start date (7+4+5-bit packed) — tried first
+ *   [10-11]  有効終了日 validity end date   (7+4+5-bit packed) — tried first
+ *   [12-13]  不明
+ *   [14]     出場駅 線区コード  to-station line code
+ *   [15]     出場駅 駅順コード  to-station station code
  *
  * @param {string} result - Raw hex response string from readCommuterPass()
  * @returns {Object|null} Parsed pass object, or null if the slot is empty / invalid
@@ -353,37 +353,36 @@ function parseCommuterPass(result) {
     var pass = {};
     pass["typeName"] = getCommuterPassType(passTypeByte);
 
-    // --- Validity dates (bytes [2-3] = start, [4-5] = end) ---
-    var startDate = tryDecodeDate(array[2], array[3]);
-    var endDate   = tryDecodeDate(array[4], array[5]);
-
-    // Discard the block entirely if either date is nonsensical (month=0, etc.).
-    // This filters "phantom" blocks that some cards return for out-of-range slot reads.
-    if (!startDate || !endDate) {
-        console.log('[定期券] block discarded — invalid date at [2-5]: '
-                    + array[2] + array[3] + ' / ' + array[4] + array[5]);
-        return null;
-    }
-    pass["startDate"] = startDate;
-    pass["endDate"]   = endDate;
-
     // --- Station lookup ---
-    // Area is encoded in the top 2 bits of byte [15] (same convention as history blocks).
-    var area = hexToFirstTwoBinaryDigits(array[15]);
+    // The area is encoded in the top 2 bits of the line-code byte itself
+    // (same numeric value as the area derived from byte [15] in history blocks).
+    var fromArea = hexToFirstTwoBinaryDigits(array[2]);
+    var fromKey  = fromArea + "-" + array[2] + "-" + array[3];
 
-    // Primary layout (bytes [10-11] = from, [12-13] = to).
-    // Fallback to bytes [6-7] / [8-9] if nothing resolves (old layout guess).
-    var fromKey  = area + "-" + array[10] + "-" + array[11];
-    var toKey    = area + "-" + array[12] + "-" + array[13];
-    var fromKeyB = area + "-" + array[6]  + "-" + array[7];
-    var toKeyB   = area + "-" + array[8]  + "-" + array[9];
+    var toArea   = hexToFirstTwoBinaryDigits(array[14]);
+    var toKey    = toArea   + "-" + array[14] + "-" + array[15];
 
-    pass["from"] = stationMap.get(fromKey) || stationMap.get(fromKeyB);
-    pass["to"]   = stationMap.get(toKey)   || stationMap.get(toKeyB);
+    pass["from"]    = stationMap.get(fromKey);
+    pass["to"]      = stationMap.get(toKey);
+    pass["fromRaw"] = fromKey;
+    pass["toRaw"]   = toKey;
+    pass["fromKey"] = fromKey;
+    pass["toKey"]   = toKey;
 
-    // Raw codes (prefer whichever key resolved, or the primary)
-    pass["fromRaw"] = pass["from"] ? fromKey : (stationMap.get(fromKeyB) ? fromKeyB : fromKey);
-    pass["toRaw"]   = pass["to"]   ? toKey   : (stationMap.get(toKeyB)   ? toKeyB   : toKey);
+    // --- Last-used date: bytes [6-7] ---
+    pass["lastUsed"] = tryDecodeDate(array[6], array[7]);
+
+    // --- Validity dates ---
+    // Primary guess: [8-9] = start, [10-11] = end.
+    // Fallback:      [4-5] = start, [8-9]   = end.
+    var startDate = tryDecodeDate(array[8],  array[9]);
+    var endDate   = tryDecodeDate(array[10], array[11]);
+    if (!startDate || !endDate) {
+        startDate = tryDecodeDate(array[4], array[5]);
+        endDate   = tryDecodeDate(array[8], array[9]);
+    }
+    pass["startDate"] = startDate || null;
+    pass["endDate"]   = endDate   || null;
 
     return pass;
 }
