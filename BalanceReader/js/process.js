@@ -296,62 +296,94 @@ function getCommuterPassType(typeCode) {
 
 
 /**
+ * Decode two consecutive hex-pair bytes as a packed date (7-bit year | 4-bit month | 5-bit day).
+ * Returns null if the resulting month or day is out of range.
+ *
+ * @param {string} hi - High byte hex string (e.g. "34")
+ * @param {string} lo - Low byte hex string (e.g. "AC")
+ * @returns {string[]|null} [yyyy, mm, dd] zero-padded strings, or null if invalid
+ */
+function tryDecodeDate(hi, lo) {
+    var parts = hexToBinary(hi + lo);
+    var month = parts[1], day = parts[2];
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return [
+        "" + convertTwoDigitYearToFourDigitYear(parts[0]),
+        padWithZeros("" + month),
+        padWithZeros("" + day)
+    ];
+}
+
+/**
  * Parse a raw commuter-pass (定期券) block returned by readCommuterPass().
  *
- * FeliCa service 0x108F — block layout after removing the 13-byte response header:
+ * FeliCa service 0x108F — confirmed byte layout after removing the 13-byte header:
  *   [0]      定期種別 (0x00 = empty slot / no pass)
- *   [1]      flags
- *   [2-3]    使用開始日  start date  (7-bit year | 4-bit month | 5-bit day)
- *   [4-5]    有効終了日  end date    (same encoding)
- *   [6]      入場駅 線区コード  from-station line code
- *   [7]      入場駅 駅順コード  from-station station code
- *   [8]      出場駅 線区コード  to-station line code
- *   [9]      出場駅 駅順コード  to-station station code
- *   [10-14]  additional info (乗継区間 etc.)
+ *   [1]      flags / 区間種別
+ *   [2-3]    有効開始日  validity start date  (7+4+5-bit packed, same as history)
+ *   [4-5]    有効終了日  validity end date    (same encoding)
+ *   [6-7]    最終利用日  last-used date (written by turnstile on each tap — NOT station codes)
+ *   [8-9]    不明 / other date
+ *   [10]     入場駅 線区コード  from-station line code
+ *   [11]     入場駅 駅順コード  from-station station code
+ *   [12]     出場駅 線区コード  to-station line code
+ *   [13]     出場駅 駅順コード  to-station station code
+ *   [14]     乗継区間 / other
  *   [15]     region flags — top 2 bits encode the area (same as transit-history blocks)
  *
+ * NOTE: bytes [2-5] are tried first; if those decode to invalid dates the block is
+ *       discarded so that "junk" empty-slot returns don't appear in the UI.
+ *
  * @param {string} result - Raw hex response string from readCommuterPass()
- * @returns {Object|null} Parsed pass object, or null if the slot is empty / parse failed
+ * @returns {Object|null} Parsed pass object, or null if the slot is empty / invalid
  */
 function parseCommuterPass(result) {
-    if (!result || result.length < 32) return null;  // Need at least 16 data bytes
+    if (!result || result.length < 58) return null;  // 13 header + 16 data = 29 bytes = 58 hex chars
 
     var array = hexStringToArray(result);
     array.splice(0, 13);  // Remove FeliCa response header (same as inputResult)
 
-    // Byte 0 == 0x00 means this slot has no commuter pass stored
+    // === Debug: print all 16 raw bytes so byte-layout issues can be diagnosed ===
+    console.log('[定期券 raw] ' + array.map((b, i) => '[' + i + ']' + b).join(' '));
+
+    // Byte 0 == 0x00 → empty slot
     var passTypeByte = parseInt("0x" + array[0]);
     if (passTypeByte === 0) return null;
 
     var pass = {};
     pass["typeName"] = getCommuterPassType(passTypeByte);
 
-    // Start date (bytes 2-3) — same binary date encoding as transaction history
-    var startRaw = hexToBinary(array[2] + array[3]);
-    startRaw[0] = "" + convertTwoDigitYearToFourDigitYear(startRaw[0]);
-    startRaw[1] = padWithZeros("" + startRaw[1]);
-    startRaw[2] = padWithZeros("" + startRaw[2]);
-    pass["startDate"] = startRaw;
+    // --- Validity dates (bytes [2-3] = start, [4-5] = end) ---
+    var startDate = tryDecodeDate(array[2], array[3]);
+    var endDate   = tryDecodeDate(array[4], array[5]);
 
-    // End date (bytes 4-5)
-    var endRaw = hexToBinary(array[4] + array[5]);
-    endRaw[0] = "" + convertTwoDigitYearToFourDigitYear(endRaw[0]);
-    endRaw[1] = padWithZeros("" + endRaw[1]);
-    endRaw[2] = padWithZeros("" + endRaw[2]);
-    pass["endDate"] = endRaw;
+    // Discard the block entirely if either date is nonsensical (month=0, etc.).
+    // This filters "phantom" blocks that some cards return for out-of-range slot reads.
+    if (!startDate || !endDate) {
+        console.log('[定期券] block discarded — invalid date at [2-5]: '
+                    + array[2] + array[3] + ' / ' + array[4] + array[5]);
+        return null;
+    }
+    pass["startDate"] = startDate;
+    pass["endDate"]   = endDate;
 
-    // Area code — derived from the top 2 bits of byte 15, same as transit-history blocks
+    // --- Station lookup ---
+    // Area is encoded in the top 2 bits of byte [15] (same convention as history blocks).
     var area = hexToFirstTwoBinaryDigits(array[15]);
 
-    // From station (bytes 6-7: line, station)
-    pass["from"] = stationMap.get(area + "-" + array[6] + "-" + array[7]);
+    // Primary layout (bytes [10-11] = from, [12-13] = to).
+    // Fallback to bytes [6-7] / [8-9] if nothing resolves (old layout guess).
+    var fromKey  = area + "-" + array[10] + "-" + array[11];
+    var toKey    = area + "-" + array[12] + "-" + array[13];
+    var fromKeyB = area + "-" + array[6]  + "-" + array[7];
+    var toKeyB   = area + "-" + array[8]  + "-" + array[9];
 
-    // To station (bytes 8-9: line, station)
-    pass["to"] = stationMap.get(area + "-" + array[8] + "-" + array[9]);
+    pass["from"] = stationMap.get(fromKey) || stationMap.get(fromKeyB);
+    pass["to"]   = stationMap.get(toKey)   || stationMap.get(toKeyB);
 
-    // Attach raw codes so the UI can show them even when the station name is unknown
-    pass["fromRaw"] = area + "-" + array[6] + "-" + array[7];
-    pass["toRaw"]   = area + "-" + array[8] + "-" + array[9];
+    // Raw codes (prefer whichever key resolved, or the primary)
+    pass["fromRaw"] = pass["from"] ? fromKey : (stationMap.get(fromKeyB) ? fromKeyB : fromKey);
+    pass["toRaw"]   = pass["to"]   ? toKey   : (stationMap.get(toKeyB)   ? toKeyB   : toKey);
 
     return pass;
 }
