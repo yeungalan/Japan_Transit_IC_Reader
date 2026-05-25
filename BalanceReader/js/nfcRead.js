@@ -36,6 +36,50 @@ import {NFCPortLib, NFCPortError, Configuration, DetectionOption, CommunicationO
     }
 	
 
+	/**
+	 * Read a commuter pass (定期券) block from FeliCa service 0x108F.
+	 * Japanese IC cards can store up to 3 commuter pass sections (area = 0, 1, 2).
+	 *
+	 * @param {number} area - Block number to read (0, 1, or 2)
+	 * @returns {string} Raw hex response string
+	 */
+	export async function readCommuterPass(area) {
+		console.log('[Reading Commuter Pass 定期券] Block: ' + area);
+
+		let finalResult = "";
+
+		try {
+			let card = await lib.detectCard('iso18092', detectOption)
+			.then(ret => {
+				return ret;
+			}, (error) => {
+				throw(error);
+			});
+
+			// Service code 0x108F (little-endian bytes: 0x8F, 0x10) — 定期券データ
+			let felica_read = new Uint8Array([16, 0x06, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 1, 0x8F, 0x10, 1, 0x80, area]);
+
+			_array_copy(felica_read, 2, card.idm, 0, card.idm.length);
+
+			let response = await lib.communicateThru(felica_read, 100, detectOption)
+			.then(ret => {
+				finalResult = _array_tohexs(ret);
+				console.log('[定期券] Block ' + area + ': ' + finalResult);
+				return ret;
+			}, (error) => {
+				// Service may not exist on this card (e.g. no commuter pass registered)
+				console.log('[定期券] Block ' + area + ' not available: ' + error.message);
+				throw(error);
+			});
+
+		} catch(error) {
+			console.log('[定期券] Error reading block ' + area + ': ' + error.message);
+		}
+
+		return finalResult;
+	}
+
+
 	export async function readCard(area) {
 		console.log('[Reading a FeliCa Card] Begin');
 

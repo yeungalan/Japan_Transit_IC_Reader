@@ -37,8 +37,20 @@
         <!-- / 矚目看板 -->
 
         <div class="ts-divider"></div>
+
+        <!-- 定期票セクション -->
+        <div id="teikiSection" class="ts-container u-vertically-padded-big" style="display:none">
+            <div class="ts-header is-large" style="margin-bottom:0.5em">定期票</div>
+            <div id="teikiList"></div>
+        </div>
+        <div id="teikiNone" class="ts-container u-vertically-padded-big" style="display:none">
+            <span class="ts-badge is-secondary">定期票なし</span>
+        </div>
+        <!-- / 定期票セクション -->
+
+        <div class="ts-divider"></div>
         <div class="ts-container u-vertically-padded-big">
-    
+
 			<table class="ts-table is-striped is-relaxed is-basic u-top-spaced-small">
                 <thead>
                     <tr>
@@ -62,9 +74,10 @@
 
 	</script>
 	<script type="module">
-		import {initNFC, readCard} from "./js/nfcRead.js";
+		import {initNFC, readCard, readCommuterPass} from "./js/nfcRead.js";
 		module.initNFC = initNFC;
 		module.readCard = readCard;
+		module.readCommuterPass = readCommuterPass;
 	</script>
 
 	
@@ -82,10 +95,16 @@
 
 
 		async function readNewCard() {
+			// Reset UI
 			$("#table").html("");
 			$("#loader").attr("style", "");
 			$("#table").attr("style", "display:none");
 			$("#finalBalance").text("¥-");
+			$("#teikiSection").hide();
+			$("#teikiNone").hide();
+			$("#teikiList").html("");
+
+			// Read transaction history (service 0x090F, blocks 0x00-0x13)
 			for(var i = 0x00; i < 0x14; i++) {
 				const result = await module.readCard(i);
 				insertTable(inputResult(result));
@@ -94,6 +113,66 @@
 			calculateBalance();
 			$("#table").attr("style", "");
 			$("#loader").attr("style", "display:none");
+
+			// Read commuter pass data (service 0x108F, up to 3 slots)
+			await readAndShowTeiki();
+		}
+
+		async function readAndShowTeiki() {
+			var foundAny = false;
+
+			for (var slot = 0x00; slot < 0x03; slot++) {
+				var raw = await module.readCommuterPass(slot);
+				if (!raw) continue;
+
+				var pass = parseCommuterPass(raw);
+				if (!pass) continue;
+
+				foundAny = true;
+				insertTeiki(pass, slot);
+			}
+
+			if (foundAny) {
+				$("#teikiSection").show();
+			} else {
+				$("#teikiNone").show();
+			}
+		}
+
+		function insertTeiki(pass, slot) {
+			var fromName = pass["from"]
+				? pass["from"][0] + " " + pass["from"][2]
+				: "（不明 " + pass["fromRaw"] + "）";
+			var toName = pass["to"]
+				? pass["to"][0] + " " + pass["to"][2]
+				: "（不明 " + pass["toRaw"] + "）";
+
+			var startStr = pass["startDate"][0] + "/" + pass["startDate"][1] + "/" + pass["startDate"][2];
+			var endStr   = pass["endDate"][0]   + "/" + pass["endDate"][1]   + "/" + pass["endDate"][2];
+
+			// Check validity relative to today
+			var today = new Date();
+			var endDate = new Date(pass["endDate"][0], parseInt(pass["endDate"][1]) - 1, parseInt(pass["endDate"][2]));
+			var isValid = endDate >= today;
+			var validBadge = isValid
+				? '<span class="ts-badge is-positive" style="margin-left:0.5em">有効</span>'
+				: '<span class="ts-badge is-negative" style="margin-left:0.5em">期限切れ</span>';
+
+			var html =
+				'<div class="ts-box" style="margin-bottom:0.8em;padding:0.8em 1em">' +
+					'<div style="display:flex;align-items:center;gap:0.5em;margin-bottom:0.4em">' +
+						'<span class="ts-badge is-primary">' + pass["typeName"] + '</span>' +
+						validBadge +
+					'</div>' +
+					'<div class="ts-text is-large" style="font-weight:700;margin:0.3em 0">' +
+						fromName + ' <span style="color:#888">→</span> ' + toName +
+					'</div>' +
+					'<div class="ts-text is-secondary">' +
+						'有効期間：' + startStr + ' 〜 ' + endStr +
+					'</div>' +
+				'</div>';
+
+			$("#teikiList").append(html);
 		}
 
 
