@@ -266,6 +266,85 @@ function padWithZeros(str) {
     return str.padStart(2, '0');
 }
 
+/**
+ * Get the commuter pass type name from its type code (byte 0 of the 定期券 block).
+ *
+ * @param {number} typeCode - Raw type byte value
+ * @returns {string} Localised pass-type label
+ */
+function getCommuterPassType(typeCode) {
+    switch (typeCode & 0xff) {
+        case 0x01: return "通勤定期";
+        case 0x02: return "通学定期";
+        case 0x03: return "定期券";
+        case 0x04: return "定期券";
+        default:   return "定期券";
+    }
+}
+
+
+/**
+ * Parse a raw commuter-pass (定期券) block returned by readCommuterPass().
+ *
+ * FeliCa service 0x108F — block layout after removing the 13-byte response header:
+ *   [0]      定期種別 (0x00 = empty slot / no pass)
+ *   [1]      flags
+ *   [2-3]    使用開始日  start date  (7-bit year | 4-bit month | 5-bit day)
+ *   [4-5]    有効終了日  end date    (same encoding)
+ *   [6]      入場駅 線区コード  from-station line code
+ *   [7]      入場駅 駅順コード  from-station station code
+ *   [8]      出場駅 線区コード  to-station line code
+ *   [9]      出場駅 駅順コード  to-station station code
+ *   [10-14]  additional info (乗継区間 etc.)
+ *   [15]     region flags — top 2 bits encode the area (same as transit-history blocks)
+ *
+ * @param {string} result - Raw hex response string from readCommuterPass()
+ * @returns {Object|null} Parsed pass object, or null if the slot is empty / parse failed
+ */
+function parseCommuterPass(result) {
+    if (!result || result.length < 32) return null;  // Need at least 16 data bytes
+
+    var array = hexStringToArray(result);
+    array.splice(0, 13);  // Remove FeliCa response header (same as inputResult)
+
+    // Byte 0 == 0x00 means this slot has no commuter pass stored
+    var passTypeByte = parseInt("0x" + array[0]);
+    if (passTypeByte === 0) return null;
+
+    var pass = {};
+    pass["typeName"] = getCommuterPassType(passTypeByte);
+
+    // Start date (bytes 2-3) — same binary date encoding as transaction history
+    var startRaw = hexToBinary(array[2] + array[3]);
+    startRaw[0] = "" + convertTwoDigitYearToFourDigitYear(startRaw[0]);
+    startRaw[1] = padWithZeros("" + startRaw[1]);
+    startRaw[2] = padWithZeros("" + startRaw[2]);
+    pass["startDate"] = startRaw;
+
+    // End date (bytes 4-5)
+    var endRaw = hexToBinary(array[4] + array[5]);
+    endRaw[0] = "" + convertTwoDigitYearToFourDigitYear(endRaw[0]);
+    endRaw[1] = padWithZeros("" + endRaw[1]);
+    endRaw[2] = padWithZeros("" + endRaw[2]);
+    pass["endDate"] = endRaw;
+
+    // Area code — derived from the top 2 bits of byte 15, same as transit-history blocks
+    var area = hexToFirstTwoBinaryDigits(array[15]);
+
+    // From station (bytes 6-7: line, station)
+    pass["from"] = stationMap.get(area + "-" + array[6] + "-" + array[7]);
+
+    // To station (bytes 8-9: line, station)
+    pass["to"] = stationMap.get(area + "-" + array[8] + "-" + array[9]);
+
+    // Attach raw codes so the UI can show them even when the station name is unknown
+    pass["fromRaw"] = area + "-" + array[6] + "-" + array[7];
+    pass["toRaw"]   = area + "-" + array[8] + "-" + array[9];
+
+    return pass;
+}
+
+
 function convertTwoDigitYearToFourDigitYear(twoDigitYear) {
     // Determine the threshold for deciding the century
     const currentYear = new Date().getFullYear();
