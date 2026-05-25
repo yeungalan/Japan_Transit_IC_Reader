@@ -84,14 +84,12 @@
 	<script>
 		document.getElementById("reload").addEventListener("click", readNewCard);
 
-		window.addEventListener('load', async function () {
+		// Only load the station CSV on page load.
+		// NFC init is deferred to the first button click so the USB
+		// permission dialog is triggered by a real user gesture.
+		window.addEventListener('load', function () {
 			init();
-			await module.initNFC();
-
-
-			setTimeout(readNewCard, 1000);
-
-		})
+		});
 
 
 		async function readNewCard() {
@@ -103,6 +101,15 @@
 			$("#teikiSection").hide();
 			$("#teikiNone").hide();
 			$("#teikiList").html("");
+
+			// initNFC() must run inside a user-gesture handler so the browser
+			// allows the WebUSB device-selection dialog.
+			var ok = await module.initNFC();
+			if (!ok) {
+				$("#loader").attr("style", "display:none");
+				$("#finalBalance").text("接続エラー");
+				return;
+			}
 
 			// Read transaction history (service 0x090F, blocks 0x00-0x13)
 			for(var i = 0x00; i < 0x14; i++) {
