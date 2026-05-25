@@ -3,10 +3,15 @@ import {NFCPortLib, NFCPortError, Configuration, DetectionOption, CommunicationO
     let lib = null;
     var detectOption = null;
 
+    /**
+     * Initialise the NFC library and open the USB device.
+     * MUST be called from a user-gesture handler (button click) so the browser
+     * will show the USB device-selection dialog.
+     *
+     * @returns {boolean} true if initialisation succeeded, false otherwise
+     */
     export async function initNFC() {
-        /* create NFCPortLib object */
         try {
-            /* init() */
             lib = new NFCPortLib();
 
             let config = new Configuration(1000 /* ackTimeout */, 1000 /* receiveTimeout */, true /* autoBaudRate*/, true /* autoDeviceSelect */);
@@ -14,25 +19,14 @@ import {NFCPortLib, NFCPortError, Configuration, DetectionOption, CommunicationO
             console.log('deviceName : ' + lib.deviceName);
             await lib.open();
 
-            /* detectCard(FeliCa Card) */
             detectOption = new DetectionOption(new Uint8Array([0x00, 0x03]), 0, true, false, null);
-			//detectOption = new DetectionOption(new Uint8Array([0x80, 0x08]), 0, true, false, null);
 
-            //
-
-            readCard();
-			//setInterval(felica_card,500);
-
+            return true;
         } catch(error) {
-			console.log('Error errorType : ' + error.errorType);
-			console.log('      message : ' + error.message);
-
-			if (lib != null) {
-				//await lib.close();
-				//lib = null;
-			}
-		}
-
+            console.log('initNFC error ' + error.errorType + ': ' + error.message);
+            lib = null;
+            return false;
+        }
     }
 	
 
@@ -108,8 +102,7 @@ import {NFCPortLib, NFCPortError, Configuration, DetectionOption, CommunicationO
 				//detectMessage.innerText = 'IDm : ' + _array_tohexs(ret.idm);
 				return ret;
 			}, (error) => {
-				//detectTitle.innerText = 'Card is not detected';
-                alert(error.message);
+				console.log('detectCard error: ' + error.message);
 				throw(error);
 			});
 
@@ -144,8 +137,7 @@ import {NFCPortLib, NFCPortError, Configuration, DetectionOption, CommunicationO
                 console.log(finalResult);
 				return ret;
 			}, (error) => {
-				//communicateTitle.innerText = 'Read error';
-                alert(error.message);
+				console.log('communicateThru error: ' + error.message);
 				throw(error);
 			});
 
